@@ -17,6 +17,7 @@ object ChicagoTransportation{
     import spark.implicits._
   
     spark.sparkContext.setLogLevel("WARN")
-
+    
+    
   }
 }
