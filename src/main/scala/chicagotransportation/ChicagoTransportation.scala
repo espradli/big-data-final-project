@@ -29,6 +29,7 @@ object ChicagoTransportation{
         .csv("/data/BigData/students/espradli/taxiDataRandom.csv")
     }
     
+    
 
   }
 }
