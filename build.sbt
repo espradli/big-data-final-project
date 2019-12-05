@@ -1,4 +1,4 @@
-name := "Chicago Transportation"
+name := "ChicagoTransportation"
 
 version := "1.0"
 
