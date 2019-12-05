@@ -28,8 +28,5 @@ object ChicagoTransportation{
         //.option("header", "true")
         .csv("/data/BigData/students/espradli/taxiDataRandom.csv")
     }
-    
-    
-
   }
 }
