@@ -12,12 +12,14 @@ import org.apache.spark.ml.feature.StandardScaler
 import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.ml.evaluation.ClusteringEvaluator
 import org.apache.spark.ml.regression.LinearRegression
+import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.classification.MultilayerPerceptronClassifier
 
 object ChicagoTransportation{
   def main(args: Array[String]): Unit ={
     val spark = SparkSession.builder()
       .appName("ChicagoTransportation").getOrCreate()
-      //.master("local[*]").appName("ChicagoTransportation").getOrCreate()
+      // .master("local[*]").appName("ChicagoTransportation").getOrCreate()
     import spark.implicits._
     
     spark.sparkContext.setLogLevel("WARN")
@@ -38,7 +40,7 @@ object ChicagoTransportation{
     lazy val taxiData = spark.read.option("inferSchema", true)
         .option("header", "true")
         .csv("/data/BigData/students/espradli/taxiData.csv")
-        //.csv("/Users/emersonspradling/ChicagoTransport/taxiDataShort.csv")
+        // .csv("/Users/emersonspradling/ChicagoTransport/taxiDataShort.csv")
 
     lazy val heatMap = {
       //? Possibly made smaller values bigger in size on map and vise versa to make everything bleed together
@@ -55,7 +57,7 @@ object ChicagoTransportation{
 
       val x = unionData.map(_.getAs[Double]("long"))
       val y = unionData.map(_.getAs[Double]("lat"))
-      val cg = ColorGradient(1.0 -> CyanARGB, (.05*maxCount) -> BlueARGB, (.97*maxCount) -> RedARGB) 
+      val cg = ColorGradient(1.0 -> GreenARGB, (.01*maxCount) -> BlueARGB, (.97*maxCount) -> RedARGB) 
       val color = unionData.map(c => cg(c.getAs[Long]("count")))
       val size = unionData.map(c => ((c.getAs[Long]("count") * 20).toDouble / maxCount) + 4)
 
@@ -150,6 +152,37 @@ object ChicagoTransportation{
       SwingRenderer(plot2, 800, 800, true)
     }
     
+    lazy val uniqueCabCompanies = taxiData.select("Company").distinct().count
+    
+    lazy val classification = {
+      // Split the data into train and test
+      val splits = taxiData.randomSplit(Array(0.7, 0.3))
+      val train = splits(0)
+      val test = splits(1)
+
+      //trip total, tips, fare, payment type
+
+      // specify layers for the neural network:
+      // input layer of size 4 (features), two intermediate of size 5 and 4
+      // and output of size 3 (classes)
+      val layers = Array[Int](4, 10, 5, taxiData.select("Company").distinct().count.toInt)
+
+      // create the trainer and set its parameters
+      val trainer = new MultilayerPerceptronClassifier()
+        .setLayers(layers)
+        .setMaxIter(100)
+
+      // train the model
+      val mpcModel = trainer.fit(train)
+
+      // compute accuracy on the test set
+      val result = mpcModel.transform(test)
+      val predictionAndLabels = result.select("prediction", "label")
+      val evaluator = new MulticlassClassificationEvaluator()
+        .setMetricName("accuracy")
+
+      println(s"Test set accuracy = ${evaluator.evaluate(predictionAndLabels)}")
+    }
     println(heatMap)
   }
 }
