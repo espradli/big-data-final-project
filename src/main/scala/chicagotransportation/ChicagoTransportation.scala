@@ -37,7 +37,8 @@ object ChicagoTransportation{
 
     lazy val taxiData = spark.read.option("inferSchema", true)
         .option("header", "true")
-        .csv("/Users/emersonspradling/ChicagoTransport/taxiDataShort.csv")
+        .csv("/data/BigData/students/espradli/taxiData.csv")
+        //.csv("/Users/emersonspradling/ChicagoTransport/taxiDataShort.csv")
 
     lazy val heatMap = {
       //? Possibly made smaller values bigger in size on map and vise versa to make everything bleed together
