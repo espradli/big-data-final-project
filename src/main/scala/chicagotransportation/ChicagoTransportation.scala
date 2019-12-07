@@ -14,6 +14,7 @@ import org.apache.spark.ml.evaluation.ClusteringEvaluator
 import org.apache.spark.ml.regression.LinearRegression
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.ml.classification.MultilayerPerceptronClassifier
+import org.apache.spark.ml.feature.StringIndexer
 
 object ChicagoTransportation{
   def main(args: Array[String]): Unit ={
@@ -152,11 +153,22 @@ object ChicagoTransportation{
       SwingRenderer(plot2, 800, 800, true)
     }
     
-    lazy val uniqueCabCompanies = taxiData.select("Company").distinct().count
-    
+    /*
     lazy val classification = {
+      val paymentIndexer = new StringIndexer()
+        .setInputCol("Payment Type")
+        .setOutputCol("paymentIndex")
+
+      val indexed = indexer.fit(df).transform(df)
+      
+      val va = new VectorAssembler()
+      .setInputCols(Array("Trip total", "Tips", "Fare", "Payment Type"))
+      .setOutputCol("features")
+      val taxiDataWithFeature = va.setHandleInvalid("skip").transform(taxiData.select("Payment Type", "Fare", "Trip total", "Tips").filter($"Tips".isNotNull))
+
+     
       // Split the data into train and test
-      val splits = taxiData.randomSplit(Array(0.7, 0.3))
+      val splits = taxiDataWithFeature.randomSplit(Array(0.7, 0.3))
       val train = splits(0)
       val test = splits(1)
 
@@ -183,6 +195,7 @@ object ChicagoTransportation{
 
       println(s"Test set accuracy = ${evaluator.evaluate(predictionAndLabels)}")
     }
-    println(heatMap)
+    */
+    println(cluster)
   }
 }
