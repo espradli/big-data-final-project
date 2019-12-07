@@ -16,8 +16,8 @@ import org.apache.spark.ml.regression.LinearRegression
 object ChicagoTransportation{
   def main(args: Array[String]): Unit ={
     val spark = SparkSession.builder()
-      //.appName("ChicagoTransportation").getOrCreate()
-      .master("local[*]").appName("ChicagoTransportation").getOrCreate()
+      .appName("ChicagoTransportation").getOrCreate()
+      //.master("local[*]").appName("ChicagoTransportation").getOrCreate()
     import spark.implicits._
     
     spark.sparkContext.setLogLevel("WARN")
