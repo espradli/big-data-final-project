@@ -11,6 +11,7 @@ import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.ml.feature.StandardScaler
 import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.ml.evaluation.ClusteringEvaluator
+import org.apache.spark.ml.regression.LinearRegression
 
 object ChicagoTransportation{
   def main(args: Array[String]): Unit ={
@@ -102,6 +103,52 @@ object ChicagoTransportation{
       SwingRenderer(plot, 800, 800, true)
     }
 
-    println(cluster)
+    lazy val regression = {
+      // val va = new VectorAssembler()
+      //   .setInputCols(taxiData.drop("Taxi ID", "Trip ID","Trip Start Timestamp", "Trip End Timestamp", "Payment Type", "Company", "Pickup Centroid Location", "Dropoff Centroid  Location").columns)
+      //   .setOutputCol("features")
+
+      // val taxiDataWithFeature = va.setHandleInvalid("skip").transform(taxiData)
+      
+      // val Row(m: Matrix) = Correlation.corr(taxiDataWithFeature, "features").head
+      // val lCol = m.colIter.toSeq(7).toArray
+      // lCol.map(Math.abs).zip(taxiData.drop("Taxi ID", "Trip ID","Trip Start Timestamp", "Trip End Timestamp", "Payment Type", "Company", "Pickup Centroid Location", "Dropoff Centroid  Location").columns).sortBy(-_._1).take(4).foreach(println)
+      
+      val va = new VectorAssembler()
+        .setInputCols(Array("Trip Miles", "Trip Seconds"))
+        .setOutputCol("features")
+      val taxiDataWithFeature = va.setHandleInvalid("skip").transform(taxiData.select("Trip Miles", "Trip Seconds", "Pickup Centroid Longitude", "Tips").filter($"Tips".isNotNull))
+
+      val lr = new LinearRegression()
+        .setFeaturesCol("features")
+        .setLabelCol("Tips")
+
+      val lrModel = lr.fit(taxiDataWithFeature)
+
+      val summary = lrModel.summary
+      println(s"Coefficients: ${lrModel.coefficients} Intercept: ${lrModel.intercept}")
+      println(s"Coefficient Standard Errors: ${summary.coefficientStandardErrors.mkString(",")}")
+      println(s"R2: ${summary.r2}")
+
+
+      val c = taxiData.limit(3000).collect()
+      
+      val x1 = c.map(_.getAs[Double]("Tips"))
+      val y1 = c.map(_.getAs[Double]("Trip Miles"))
+      val color1 = BlackARGB
+      val size1 = 5
+
+      val x2 = c.map(_.getAs[Double]("Tips"))
+      val y2 = c.map(_.getAs[Int]("Trip Seconds"))
+      val color2 = RedARGB
+      val size2 = 5
+
+      val plot = Plot.scatterPlot(x1, y1, "Trip Miles in Relation to Tips", "Tips", "Trip Miles", size1, color1)
+      val plot2 = Plot.scatterPlot(x2, y2, "Trip Seconds in Relation to Tips", "Tips", "Trip Seconds", size2, color2)
+      SwingRenderer(plot, 800, 800, true)
+      SwingRenderer(plot2, 800, 800, true)
+    }
+    
+    println(heatMap)
   }
 }
