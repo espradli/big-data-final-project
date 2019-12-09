@@ -15,6 +15,11 @@ import org.apache.spark.ml.regression.LinearRegression
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.ml.classification.MultilayerPerceptronClassifier
 import org.apache.spark.ml.feature.StringIndexer
+import org.apache.spark.ml.Pipeline
+import org.apache.spark.ml.feature.OneHotEncoderEstimator
+import org.apache.spark.sql.Row
+import org.apache.spark.ml.linalg.Matrix
+import org.apache.spark.ml.stat.Correlation
 
 object ChicagoTransportation{
   def main(args: Array[String]): Unit ={
@@ -39,12 +44,18 @@ object ChicagoTransportation{
     }
 
     lazy val taxiData = spark.read.option("inferSchema", true)
-        .option("header", "true")
-        .csv("/data/BigData/students/espradli/taxiData.csv")
-        // .csv("/Users/emersonspradling/ChicagoTransport/taxiDataShort.csv")
+      .option("header", "true")
+      .csv("/data/BigData/students/espradli/taxiData.csv")
+      // .csv("/Users/emersonspradling/ChicagoTransport/taxiDataShort.csv")
+
+    // lazy val lstationData = spark.read.option("inferSchema", true)
+    //   .option("header", "true")
+    //   // .csv("/data/BigData/students/espradli/LStationStops.csv")
+    //   .csv("/Users/emersonspradling/ChicagoTransport/LStationStops.csv")
 
     lazy val heatMap = {
-      //? Possibly made smaller values bigger in size on map and vise versa to make everything bleed together
+      //TODO? Possibly made smaller values bigger in size on map and vise versa to make everything bleed together
+      //TODO insert L train stops
       val pickupData = taxiData.select("Pickup Centroid Latitude","Pickup Centroid Longitude")
         .withColumnRenamed("Pickup Centroid Latitude", "lat")
         .withColumnRenamed("Pickup Centroid Longitude", "long")
@@ -96,28 +107,54 @@ object ChicagoTransportation{
 
       val pointsWithCountPrediction = pointsWithPrediction.join(pointsCount, Seq("Pickup Centroid Latitude", "Pickup Centroid Longitude")).collect()
       val maxCount = pointsWithCountPrediction.map(_.getAs[Long]("pointCount")).max
+      
+      // val pointsCount =  taxiDataWithClusters.groupBy($"Pickup Centroid Latitude", $"Pickup Centroid Longitude").agg(count("*").as("pointCount"))
+      // val pointsWithCountPrediction = taxiDataWithClusters.groupBy($"Pickup Centroid Latitude", $"Pickup Centroid Longitude")
+      //   .agg(mean("prediction").as("prediction")).join(pointsCount, Seq("Pickup Centroid Latitude", "Pickup Centroid Longitude")).collect()
+      // val maxCount = pointsWithCountPrediction.map(_.getAs[Long]("pointCount")).max
 
-      val x = pointsWithCountPrediction.map(_.getAs[Double]("Pickup Centroid Longitude"))
-      val y = pointsWithCountPrediction.map(_.getAs[Double]("Pickup Centroid Latitude"))
-      val cg = ColorGradient(0.0 -> BlackARGB, 1.0 -> GreenARGB, 2.0 -> RedARGB, 3.0 -> BlueARGB, 4.0 -> MagentaARGB) 
-      val color = pointsWithCountPrediction.map(c => cg(c.getAs[Int]("prediction")))
-      val size = pointsWithCountPrediction.map(c => ((c.getAs[Long]("pointCount") * 20).toDouble / maxCount) + 4)
+      val latlongplot = {
+        val x = pointsWithCountPrediction.map(_.getAs[Double]("Pickup Centroid Longitude"))
+        val y = pointsWithCountPrediction.map(_.getAs[Double]("Pickup Centroid Latitude"))
+        val cg = ColorGradient(0.0 -> YellowARGB, 1.0 -> GreenARGB, 2.0 -> RedARGB, 3.0 -> BlueARGB, 4.0 -> MagentaARGB) 
+        val color = pointsWithCountPrediction.map(c => cg(c.getAs[Int]("prediction")))
+        val size = pointsWithCountPrediction.map(c => ((c.getAs[Long]("pointCount") * 20).toDouble / maxCount) + 4)
 
-      val plot = Plot.scatterPlot(x, y, "Taxi Distance Clustering", "Longitude", "Latitude", size, color)
-      SwingRenderer(plot, 800, 800, true)
+        val plot = Plot.scatterPlot(x, y, "Taxi Distance Clustering", "Longitude", "Latitude", size, color)
+        plot
+      }
+
+      val milesSecondsFarePlot = {
+        val data = taxiDataWithClusters.randomSplit(Array(.05, .95))(1).filter($"Trip Miles" < 300.0 && $"Trip Seconds" < 12000.0).collect
+
+        val x = data.map(_.getAs[Double]("Trip Miles"))
+        val y = data.map(_.getAs[Int]("Trip Seconds"))
+        val cg = ColorGradient(0.0 -> YellowARGB, 1.0 -> GreenARGB, 2.0 -> RedARGB, 3.0 -> BlueARGB, 4.0 -> MagentaARGB) 
+        val color = data.map(c => cg(c.getAs[Int]("prediction")))
+        val size = data.map(c => ((c.getAs[Double]("Fare") * 20).toDouble / maxCount) + 4)
+
+        val plot = Plot.scatterPlot(x, y, "Taxi Distance Clustering", "Trip Miles", "Trip Seconds", size, color)
+        plot
+      }
+
+      SwingRenderer(latlongplot, 800, 800, true)
+      SwingRenderer(milesSecondsFarePlot, 800, 800, true)
+    }
+
+    lazy val correlationCoefMatrixRegression = {
+      val va = new VectorAssembler()
+        .setInputCols(taxiData.drop("Taxi ID", "Trip ID","Trip Start Timestamp", "Trip End Timestamp", "Payment Type", "Company", "Pickup Centroid Location", "Dropoff Centroid  Location").columns)
+        .setOutputCol("features")
+
+      val taxiDataWithFeature = va.setHandleInvalid("skip").transform(taxiData)
+      
+      val Row(m: Matrix) = Correlation.corr(taxiDataWithFeature, "features").head
+      val lCol = m.colIter.toSeq(7).toArray
+      lCol.map(Math.abs).zip(taxiData.drop("Taxi ID", "Trip ID","Trip Start Timestamp", "Trip End Timestamp", "Payment Type", "Company", "Pickup Centroid Location", "Dropoff Centroid  Location").columns)
+        .sortBy(-_._1).take(4).foreach(println)
     }
 
     lazy val regression = {
-      // val va = new VectorAssembler()
-      //   .setInputCols(taxiData.drop("Taxi ID", "Trip ID","Trip Start Timestamp", "Trip End Timestamp", "Payment Type", "Company", "Pickup Centroid Location", "Dropoff Centroid  Location").columns)
-      //   .setOutputCol("features")
-
-      // val taxiDataWithFeature = va.setHandleInvalid("skip").transform(taxiData)
-      
-      // val Row(m: Matrix) = Correlation.corr(taxiDataWithFeature, "features").head
-      // val lCol = m.colIter.toSeq(7).toArray
-      // lCol.map(Math.abs).zip(taxiData.drop("Taxi ID", "Trip ID","Trip Start Timestamp", "Trip End Timestamp", "Payment Type", "Company", "Pickup Centroid Location", "Dropoff Centroid  Location").columns).sortBy(-_._1).take(4).foreach(println)
-      
       val va = new VectorAssembler()
         .setInputCols(Array("Trip Miles", "Trip Seconds"))
         .setOutputCol("features")
@@ -134,7 +171,6 @@ object ChicagoTransportation{
       println(s"Coefficient Standard Errors: ${summary.coefficientStandardErrors.mkString(",")}")
       println(s"R2: ${summary.r2}")
 
-
       val c = taxiData.limit(3000).collect()
       
       val x1 = c.map(_.getAs[Double]("Tips"))
@@ -147,37 +183,76 @@ object ChicagoTransportation{
       val color2 = RedARGB
       val size2 = 5
 
+      //TODO? possibly extimate tip nulls
+
       val plot = Plot.scatterPlot(x1, y1, "Trip Miles in Relation to Tips", "Tips", "Trip Miles", size1, color1)
       val plot2 = Plot.scatterPlot(x2, y2, "Trip Seconds in Relation to Tips", "Tips", "Trip Seconds", size2, color2)
       SwingRenderer(plot, 800, 800, true)
       SwingRenderer(plot2, 800, 800, true)
     }
-    
-    /*
-    lazy val classification = {
+
+    lazy val correlationCoefMatrixClassification = {
+      
+      //coppied
+      val taxiDataDropNa = taxiData.na.drop()
+      
       val paymentIndexer = new StringIndexer()
         .setInputCol("Payment Type")
         .setOutputCol("paymentIndex")
 
-      val indexed = indexer.fit(df).transform(df)
+      val companyIndexer = new StringIndexer()
+        .setInputCol("Company")
+        .setOutputCol("label")
+
+      val pipeline = new Pipeline()
+        .setStages(Array(paymentIndexer, companyIndexer))
+
+      val taxiDataTransformed = pipeline.fit(taxiDataDropNa).transform(taxiDataDropNa)
+      //
       
       val va = new VectorAssembler()
-      .setInputCols(Array("Trip total", "Tips", "Fare", "Payment Type"))
-      .setOutputCol("features")
-      val taxiDataWithFeature = va.setHandleInvalid("skip").transform(taxiData.select("Payment Type", "Fare", "Trip total", "Tips").filter($"Tips".isNotNull))
+        .setInputCols(taxiDataTransformed.drop("Taxi ID", "Trip ID","Trip Start Timestamp", "Trip End Timestamp", "Payment Type", "Company", "Pickup Centroid Location", "Dropoff Centroid  Location").columns)
+        .setOutputCol("features")
 
-     
+      val taxiDataWithFeature = va.setHandleInvalid("skip").transform(taxiDataTransformed)
+      
+      val Row(m: Matrix) = Correlation.corr(taxiDataWithFeature, "features").head
+      val lCol = m.colIter.toSeq(16).toArray
+      lCol.map(Math.abs).zip(taxiDataTransformed.drop("Taxi ID", "Trip ID","Trip Start Timestamp", "Trip End Timestamp", "Payment Type", "Company", "Pickup Centroid Location", "Dropoff Centroid  Location").columns)
+        .sortBy(-_._1).take(4).foreach(println)
+    }
+    
+    lazy val classification = {
+      val taxiDataDropNa = taxiData.na.drop()
+      
+      val paymentIndexer = new StringIndexer()
+        .setInputCol("Payment Type")
+        .setOutputCol("paymentIndex")
+
+      val companyIndexer = new StringIndexer()
+        .setInputCol("Company")
+        .setOutputCol("label")
+
+      val pipeline = new Pipeline()
+        .setStages(Array(paymentIndexer, companyIndexer))
+
+      val taxiDataTransformed = pipeline.fit(taxiDataDropNa).transform(taxiDataDropNa)
+      
+      val va = new VectorAssembler()
+        //.setInputCols(Array("Trip Total", "Tips", "Fare", "paymentIndex"))
+        .setInputCols(Array("Trip Miles", "Trip Seconds", "Tips", "paymentIndex"))
+        .setOutputCol("features")
+      val taxiDataWithFeature = va.setHandleInvalid("skip").transform(taxiDataTransformed)
+
       // Split the data into train and test
       val splits = taxiDataWithFeature.randomSplit(Array(0.7, 0.3))
       val train = splits(0)
       val test = splits(1)
 
-      //trip total, tips, fare, payment type
-
       // specify layers for the neural network:
       // input layer of size 4 (features), two intermediate of size 5 and 4
       // and output of size 3 (classes)
-      val layers = Array[Int](4, 10, 5, taxiData.select("Company").distinct().count.toInt)
+      val layers = Array[Int](4, 10, 15, taxiDataDropNa.select("Company").distinct().count.toInt)
 
       // create the trainer and set its parameters
       val trainer = new MultilayerPerceptronClassifier()
@@ -192,10 +267,11 @@ object ChicagoTransportation{
       val predictionAndLabels = result.select("prediction", "label")
       val evaluator = new MulticlassClassificationEvaluator()
         .setMetricName("accuracy")
-
+      
+      //TODO?Graph of predictions and actuals
       println(s"Test set accuracy = ${evaluator.evaluate(predictionAndLabels)}")
     }
-    */
+    
     println(cluster)
   }
 }
