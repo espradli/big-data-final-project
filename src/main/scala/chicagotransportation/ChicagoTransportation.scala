@@ -225,22 +225,16 @@ object ChicagoTransportation{
     lazy val classification = {
       val taxiDataDropNa = taxiData.na.drop()
       
+      taxiDataDropNa.select("Payment Type").distinct().show()
       val paymentIndexer = new StringIndexer()
         .setInputCol("Payment Type")
-        .setOutputCol("paymentIndex")
-
-      val companyIndexer = new StringIndexer()
-        .setInputCol("Company")
         .setOutputCol("label")
 
-      val pipeline = new Pipeline()
-        .setStages(Array(paymentIndexer, companyIndexer))
-
-      val taxiDataTransformed = pipeline.fit(taxiDataDropNa).transform(taxiDataDropNa)
+      val taxiDataTransformed = paymentIndexer.fit(taxiDataDropNa).transform(taxiDataDropNa)
       
       val va = new VectorAssembler()
         //.setInputCols(Array("Trip Total", "Tips", "Fare", "paymentIndex"))
-        .setInputCols(Array("Trip Miles", "Trip Seconds", "Tips", "paymentIndex"))
+        .setInputCols(Array("Trip Miles", "Trip Seconds", "Tips", "Extras"))
         .setOutputCol("features")
       val taxiDataWithFeature = va.setHandleInvalid("skip").transform(taxiDataTransformed)
 
@@ -252,7 +246,7 @@ object ChicagoTransportation{
       // specify layers for the neural network:
       // input layer of size 4 (features), two intermediate of size 5 and 4
       // and output of size 3 (classes)
-      val layers = Array[Int](4, 10, 15, taxiDataDropNa.select("Company").distinct().count.toInt)
+      val layers = Array[Int](4, 10, 5, taxiDataTransformed.select("label").distinct().count.toInt)
 
       // create the trainer and set its parameters
       val trainer = new MultilayerPerceptronClassifier()
@@ -267,11 +261,27 @@ object ChicagoTransportation{
       val predictionAndLabels = result.select("prediction", "label")
       val evaluator = new MulticlassClassificationEvaluator()
         .setMetricName("accuracy")
-      
-      //TODO?Graph of predictions and actuals
+
       println(s"Test set accuracy = ${evaluator.evaluate(predictionAndLabels)}")
+
+      val plottingData = result.limit(50000).select("prediction", "label", "Tips", "Trip Miles").collect()//.sortBy(_.getAs[Double]("label"))
+      val zippedPlottingData = plottingData.zip(0 until plottingData.length-1)
+      val maxTip = zippedPlottingData.map(c => ((c._1.getAs[Double]("Tips")))).max
+      val x1 = zippedPlottingData.map(_._1.getAs[Double]("Trip Miles")).filter(_ < 60)
+      val y1 = zippedPlottingData.map(_._1.getAs[Double]("label"))
+      val color1 = BlackARGB
+      val size1 = zippedPlottingData.map(c => ((c._1.getAs[Double]("Tips") * 20).toDouble / maxTip) + 4)
+
+      val x2 = zippedPlottingData.map(_._1.getAs[Double]("Trip Miles")).filter(_ < 60)
+      val y2 = zippedPlottingData.map(_._1.getAs[Double]("prediction"))
+      val color2 = RedARGB
+      val size2 = zippedPlottingData.map(c => ((c._1.getAs[Double]("Tips") * 20).toDouble / maxTip) + 4)
+
+      val plot = Plot.scatterPlotGrid(Seq(Seq((x2, y2, color2,size2)), Seq((x1, y1,color1, size1))), "Prediction V Acual of Payment Type", "Trip Miles", "Payment Type")
+      SwingRenderer(plot, 800, 800, true)
+      
     }
     
-    println(cluster)
+     println(classification)
   }
 }
