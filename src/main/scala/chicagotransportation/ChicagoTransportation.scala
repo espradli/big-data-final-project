@@ -24,8 +24,8 @@ import org.apache.spark.ml.stat.Correlation
 object ChicagoTransportation{
   def main(args: Array[String]): Unit ={
     val spark = SparkSession.builder()
-      .appName("ChicagoTransportation").getOrCreate()
-      // .master("local[*]").appName("ChicagoTransportation").getOrCreate()
+      // .appName("ChicagoTransportation").getOrCreate()
+      .master("local[*]").appName("ChicagoTransportation").getOrCreate()
     import spark.implicits._
     
     spark.sparkContext.setLogLevel("WARN")
@@ -45,8 +45,8 @@ object ChicagoTransportation{
 
     lazy val taxiData = spark.read.option("inferSchema", true)
       .option("header", "true")
-      .csv("/data/BigData/students/espradli/taxiData.csv")
-      // .csv("/Users/emersonspradling/ChicagoTransport/taxiDataShort.csv")
+      // .csv("/data/BigData/students/espradli/taxiData.csv")
+      .csv("/Users/emersonspradling/ChicagoTransport/taxiDataShort.csv")
 
     // lazy val lstationData = spark.read.option("inferSchema", true)
     //   .option("header", "true")
@@ -282,6 +282,6 @@ object ChicagoTransportation{
       
     }
     
-     println(classification)
+     println(cluster)
   }
 }
