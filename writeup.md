@@ -67,9 +67,9 @@ After the clustering algorithm, I then ran a Multilayer Perceptron Classifier al
 |      Mobile|
 |       Pcard|
 
-The algorithm completed with a test set accuracy of 97%. I then graphed both the predictions of payment type in red and the actual payment type in black below to show the accuracy of the model. We can see that this algorithm performed at a high rate and that the input dimensions had a strong correlation with the payment type.
+The algorithm completed with a test set accuracy of 97%. I then graphed both the predictions of payment type in red and the actual payment type in black below to show the accuracy of the model where size is Tips. We can see that this algorithm performed at a high rate and that the input dimensions had a strong correlation with the payment type.
 
-![Classifier]()
+![Classifier](images/mlp.png)
 
 After the completion of this project, I believe that there is room for expansion. An interesting addition would be to incorporate the use of the L-train stop and usage and how this correlates to the Taxi usage. I would also like to possibly use the temporal dimension of the data in order to find taxi trends over a period of time. Finally, I believe it would be useful to use my models to predict future data points.
 
